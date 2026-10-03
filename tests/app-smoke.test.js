@@ -1,0 +1,494 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+
+const root = path.join(__dirname, '..');
+
+test('项目关键文件齐全', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.ok(fs.existsSync(path.join(root, pkg.main)), '主进程入口缺失');
+  const main = fs.readFileSync(path.join(root, pkg.main), 'utf8');
+  assert.ok(pkg.scripts.start, '缺少 start 脚本');
+  assert.ok(pkg.scripts.test, '缺少 test 脚本');
+  assert.ok(pkg.scripts.smoke, '缺少 smoke 脚本');
+  assert.ok(pkg.scripts['smoke:open'], '缺少 smoke:open 脚本');
+  assert.ok(pkg.scripts['smoke:pdf'], '缺少 smoke:pdf 脚本');
+  assert.ok(pkg.scripts.shot, '缺少 shot 截图脚本');
+  assert.ok(main.includes("capture('pet_console.png')"), '截图验收应包含有珠控制台界面');
+  assert.ok(main.includes('const importResult = await __gaiaDebug.importPaths([fixture])'), 'EPUB 烟雾测试应走真实导入流程');
+  assert.ok(main.includes('parsed.importSucceeded === true'), 'EPUB 烟雾测试应验证导入成功');
+  assert.ok(main.includes('parsed.importChooserReady === true') && main.includes('parsed.importChooserClosed === true'), 'EPUB 烟雾测试应验证添加图书窗口的打开、聚焦与关闭');
+  assert.ok(main.includes("bookmarkDoc.body.dispatchEvent(bookmarkContextEvent)") && main.includes('parsed.bookmarkActionSaved === true') && main.includes('parsed.collectionTabsWork === true'), 'EPUB 烟雾测试应验证右键添加书签和书签笔记页签切换');
+  assert.ok(main.includes("await __gaiaDebug.runBookSearch('测试内容')"), 'EPUB 烟雾测试应执行真实全文搜索');
+  assert.ok(main.includes('parsed.bookSearchRuntimeReady === true'), 'EPUB 烟雾测试应验证搜索跳转与正文高亮');
+  assert.ok(main.includes('parsed.edgeTocDisabledBlocksHover === true') && main.includes('parsed.edgeTocDisabledKeepsManual === true'), 'EPUB 烟雾测试应验证左缘开关不影响手动目录');
+  assert.ok(main.includes('parsed.singleFits === true') && main.includes('parsed.pairingWorks === true') && main.includes('parsed.zoomModesWork === true'), 'PDF 烟雾测试应验证整页适配、双页配对和缩放模式');
+  assert.ok(main.includes("__gaiaDebug.setMode('spread')") && main.includes('epubSearchSpreadAligned'), 'EPUB 搜索烟雾测试必须在双页模式验证整页对齐');
+  assert.ok(main.includes('window.resizeTo(smokeWindowWidth + 220') && main.includes('epubSearchWindowResizeReady'), 'EPUB 搜索烟雾测试必须覆盖搜索框开启时的窗口放大重排');
+  assert.ok(main.includes('parsed.sidePanelLayoutOk === true') && main.includes('parsed.sidePanelAnchorOk === true') && main.includes('parsed.fullBookSearchLayoutOk === true'), 'MOBI/AZW3 烟雾测试应验证侧栏重排、搜索跳转与阅读锚点');
+  assert.ok(main.includes('parsed.aiUiReady === true'), 'EPUB 烟雾测试应验证 AI 界面与章节提取');
+  for (const frame of ['pet_tilt_early.png', 'pet_tilt_peak.png', 'pet_tilt_return.png']) {
+    assert.ok(main.includes(`capture('${frame}')`), `截图验收缺少歪头动作帧 ${frame}`);
+  }
+  assert.ok(main.includes("capture('pet_wake_peak.png')"), '截图验收应包含唤醒动作峰值帧');
+  for (const frame of ['pet_yawn_early.png', 'pet_yawn_peak.png', 'pet_yawn_return.png']) {
+    assert.ok(main.includes(`capture('${frame}')`), `截图验收缺少打哈欠动作帧 ${frame}`);
+  }
+  for (const frame of ['pet_drowse_early.png', 'pet_drowse_peak.png', 'pet_drowse_return.png']) {
+    assert.ok(main.includes(`capture('${frame}')`), `截图验收缺少困倦点头动作帧 ${frame}`);
+  }
+  for (const f of [
+    'src/preload.js',
+    'src/shared/bookmarks.js',
+    'src/shared/epub-repair.js',
+    'src/shared/library.js',
+    'src/shared/pet.js',
+    'src/shared/pdf-layout.js',
+    'src/shared/toc-panel.js',
+    'src/shared/spread-gap.js',
+    'src/renderer/index.html',
+    'src/renderer/app.js',
+    'src/renderer/pet.js',
+  ]) {
+    assert.ok(fs.existsSync(path.join(root, f)), f + ' 缺失');
+  }
+  for (const v of ['jszip.min.js', 'epub.min.js', 'pdf.min.js', 'pdf.worker.min.js']) {
+    assert.ok(fs.existsSync(path.join(root, 'src/renderer/vendor', v)), 'vendor ' + v + ' 缺失');
+  }
+});
+
+test('首页与闪屏图片资源存在', () => {
+  for (const img of ['1.jpg', '2.jpeg']) {
+    const f = path.join(root, 'src', 'renderer', 'images', img);
+    assert.ok(fs.existsSync(f), img + ' 缺失，请先复制到 src/renderer/images/');
+    assert.ok(fs.statSync(f).size > 10000, img + ' 异常过小');
+  }
+});
+
+test('桌宠素材与映射表完整', () => {
+  const petDir = path.join(root, 'src', 'renderer', 'images', 'pet');
+  assert.ok(fs.existsSync(path.join(petDir, 'pet-expressions.json')), 'pet-expressions.json 缺失');
+  const cellsDir = path.join(petDir, 'cells');
+  const files = fs.existsSync(cellsDir) ? fs.readdirSync(cellsDir) : [];
+  assert.ok(files.length >= 21, '表情格不足 21 个');
+  for (const name of ['半身照.png', '日常表情.png']) {
+    assert.ok(fs.existsSync(path.join(cellsDir, name)), name + ' 缺失');
+  }
+  const mapping = JSON.parse(fs.readFileSync(path.join(petDir, 'pet-expressions.json'), 'utf8'));
+  assert.strictEqual(Object.keys(mapping.cells).length, 21, '映射表条目数不为 21');
+  const yawnFace = path.join(petDir, 'faces', '打哈欠.png');
+  assert.ok(fs.existsSync(yawnFace), '缺少打哈欠专用表情贴片');
+  assert.ok(fs.statSync(yawnFace).size > 10000, '打哈欠专用表情贴片异常');
+});
+
+test('阅读目录支持左下角按钮与可关闭的左缘悬停展开', () => {
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'src', 'renderer', 'styles.css'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'src', 'main.js'), 'utf8');
+  for (const id of ['btn-reader-toc', 'toc-panel', 'toc-backdrop', 'toc-edge-trigger', 'btn-edge-toc', 'edge-toc-value']) {
+    assert.ok(html.includes(`id="${id}"`), `阅读目录缺少 ${id}`);
+  }
+  assert.ok(html.includes('../shared/toc-panel.js'), '渲染层未加载目录状态机');
+  assert.ok(app.includes('toggleTocManualMode(tocMode)'), '目录按钮必须进入手动模式');
+  assert.ok(app.includes('enterTocEdgeMode(tocMode, readerInteractionBlocksEdgeToc())'), '阅读区左缘必须在空闲时进入悬停模式');
+  assert.ok(app.includes('edgeTocEnabled: true') && app.includes('state.prefs.edgeTocEnabled !== false'), '左缘悬停目录必须默认开启并兼容旧偏好');
+  assert.ok(app.includes("if (!edgeTocEnabled()) return") && app.includes("window.api.stateSet('prefs', state.prefs)"), '关闭后必须阻止左缘展开并持久化');
+  assert.ok(app.includes('setTocMode(disableTocEdgeMode(tocMode))'), '关闭左缘功能时必须收回悬停目录');
+  assert.ok(app.includes("els.edgeTocButton.addEventListener('click', toggleEdgeToc)"), '左缘目录开关未绑定');
+  assert.ok(css.includes('.toc-edge-trigger.disabled'), '其他阅读工具开启时必须禁用左缘感应区');
+  assert.ok(app.includes('activateTocItemMode(tocMode)'), '目录跳转后应根据打开来源决定是否关闭');
+  assert.ok(app.includes("setTocMessage('（目录加载中…）')") && app.includes('els.tocPanel.replaceChildren()'), '目录应先清除加载占位后再渲染真实条目');
+  assert.ok(main.includes('parsed.tocWithEntriesHasNoEmptyMessage === true'), 'EPUB 烟雾测试应验证有目录时不显示空目录提示');
+  assert.ok(app.includes("els.tocEdgeTrigger.addEventListener('pointerenter'"), '左缘缺少鼠标进入监听');
+  assert.ok(app.includes("els.tocPanel.addEventListener('pointerleave'"), '目录缺少鼠标离开监听');
+  assert.ok(css.includes('transform: translateX(-102%)') && css.includes('.toc-panel.toc-panel-open'), '目录缺少从左向右滑出的动画');
+  assert.ok(css.includes('.reader-toc-button'), '阅读页左下角目录按钮缺少样式');
+  const footerStart = html.indexOf('<footer class="statusbar">');
+  assert.ok(footerStart >= 0, '阅读状态栏必须存在');
+  const footer = html.slice(footerStart, html.indexOf('</footer>', footerStart) + 9);
+  assert.ok(footer.includes('id="btn-reader-toc"') && footer.includes('id="page-nav"'), '目录与翻页按钮应位于状态栏，不能悬浮遮挡正文');
+  assert.ok(css.includes('grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)'), '底栏应为左目录、中翻页、右状态的三栏布局');
+  assert.ok(css.includes('min-height: 48px') && css.includes('padding: 9px 16px 8px'), '底栏控件上下应保留足够留白');
+});
+
+test('侧栏尺寸变化统一刷新全部阅读格式并保留阅读锚点', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'src', 'renderer', 'styles.css'), 'utf8');
+  assert.ok(css.includes('#reader-content { min-width: 0; min-height: 0;'), '阅读区必须允许在侧栏出现后正确收缩');
+  assert.ok(app.includes('function captureReaderLayoutAnchor()') && app.includes('function scheduleReaderLayoutRefresh(anchor, options)'), '侧栏变化必须统一捕获并恢复阅读位置');
+  assert.ok(app.includes('epubWindowResizeTimer') && app.includes('scheduleReaderLayoutRefresh(anchor, { force: true })'), 'EPUB 窗口尺寸变化必须在尺寸稳定后按实际阅读区强制重排');
+  assert.ok(app.includes("c && c.format === 'epub' ? Math.floor(bounds.width"), 'EPUB 重排必须使用不受旧画布滚动条影响的阅读区宽度');
+  assert.ok(app.includes('c.rendition.resize(size.width, size.height, anchor.cfi'), 'EPUB 必须按实际阅读区尺寸与 CFI 重排');
+  assert.ok(app.includes("c.format === 'pdf' && c.pdf") && app.includes('renderPdfPage({ anchor: pdfAnchor })'), 'PDF 必须随阅读区尺寸重新渲染并保持相对视口锚点');
+  assert.ok(app.includes('anchor.position = c.paginator.capturePosition()') && app.includes('c.paginator.reflow(sameChapter ? anchor.position : undefined)'), 'TXT、MOBI、AZW3 必须重排并恢复文字或插图阅读位置');
+  assert.ok(app.includes('await waitForReaderLayoutRefresh()'), '搜索结果跳转必须等待侧栏布局稳定');
+  assert.ok(!app.includes("firstMark.scrollIntoView({ block: 'center', inline: 'center' })"), '分页搜索高亮不得再次横向滚动到半页位置');
+  assert.ok(app.includes("firstMark && c && c.format === 'pdf'"), '仅 PDF 搜索高亮可以在页内滚动到命中文字');
+});
+
+test('本地 GaiaReading_Lucky 品牌、版本号、依赖锁和界面同步', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  assert.strictEqual(pkg.name, 'gaiareading_lucky');
+  assert.strictEqual(pkg.build.productName, 'GaiaReading_Lucky');
+  assert.strictEqual(pkg.build.appId, 'com.gaiareading.lucky');
+  assert.strictEqual(lock.name, pkg.name);
+  assert.strictEqual(lock.packages[''].name, pkg.name);
+  assert.strictEqual(pkg.version, '1.2.7');
+  assert.strictEqual(lock.version, pkg.version);
+  assert.strictEqual(lock.packages[''].version, pkg.version);
+  assert.strictEqual(pkg.build.win.artifactName, 'GaiaReading_Lucky.${version}.${ext}', '本地构建文件名应与新品牌一致');
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  assert.match(html, /class="drawer-about"[^>]*>[\s\S]*?GaiaReading_Lucky[\s\S]*?1\.2\.7[\s\S]*?<\/footer>/, '关于面板版本号未同步');
+  assert.ok(html.includes('btn-spread'), '缺少双页模式开关');
+  assert.ok(html.includes('reader-theme-options'), '缺少主题切换');
+  assert.ok(html.includes('fx-canvas'), '缺少粒子画布');
+});
+
+test('AI 章节助手接入首页、设置与阅读器并保护 API Key', () => {
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const pet = fs.readFileSync(path.join(root, 'src', 'renderer', 'pet.js'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'src', 'main.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(root, 'src', 'preload.js'), 'utf8');
+  const ai = fs.readFileSync(path.join(root, 'src', 'shared', 'ai.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'src', 'renderer', 'styles.css'), 'utf8');
+
+  for (const id of ['btn-home-ai', 'ai-view', 'btn-ai-back', 'drawer-ai', 'btn-open-ai-center', 'ai-profile-list', 'ai-profile-name', 'btn-ai-profile-new', 'ai-provider', 'ai-base-url', 'ai-api-key', 'btn-ai-key-clear', 'ai-model-options', 'btn-ai-model-menu', 'btn-ai-model-refresh', 'reader-bgm-slot', 'btn-alice-comment', 'ai-reader-model', 'btn-ai-chat-center', 'btn-ai-reader', 'ai-summary-panel', 'ai-panel-drag-handle', 'btn-ai-appearance', 'ai-appearance-popover', 'btn-ai-summary-prompt', 'btn-ai-characters-prompt', 'btn-ai-foreshadow-prompt', 'ai-chat-pane', 'ai-font-select', 'btn-ai-font-minus', 'btn-ai-line-height', 'ai-chat-messages', 'ai-chat-input', 'drawer-lookup', 'search-engine', 'search-custom-row', 'search-custom-template']) {
+    assert.ok(html.includes(`id="${id}"`), `AI 界面缺少 ${id}`);
+  }
+  for (const bridge of ['aiProfilesGet', 'aiProfileSave', 'aiProfileActivate', 'aiProfileDelete', 'aiProfileTest', 'aiProfileModels', 'aiChat', 'aiChatCancel', 'aiAliceComment', 'dictionaryOpen', 'searchWeb']) {
+    assert.ok(preload.includes(bridge), `preload 缺少 ${bridge}`);
+  }
+  assert.ok(main.includes('safeStorage.encryptString'), 'API Key 必须通过 Electron safeStorage 加密');
+  assert.ok(main.includes('safeStorage.decryptString'), 'API Key 必须只在主进程解密');
+  assert.ok(main.includes("ipcMain.handle('ai:chat'"), '缺少受控 AI 对话 IPC');
+  assert.ok(main.includes("ipcMain.handle('ai:chat:cancel'") && ai.includes('externalSignal.addEventListener'), 'AI 对话必须能取消实际网络请求');
+  assert.ok(!main.includes("ipcMain.handle('ai:summarize'") && !preload.includes('aiSummarize'), '独立总结调用链应被移除');
+  assert.ok(main.includes("ipcMain.handle('ai:alice-comment'"), '缺少有珠短评 IPC');
+  assert.ok(main.includes("ipcMain.handle('ai:profile:activate'"), '缺少多接口切换 IPC');
+  assert.ok(main.includes("ipcMain.handle('ai:profile:models'"), '缺少接口模型列表 IPC');
+  assert.ok(ai.includes("redirect: 'error'"), 'AI 请求必须拒绝重定向，避免 Key 被转发');
+  assert.ok(ai.includes('function parseEventStream'), 'AI 响应应兼容错误返回的 SSE 增量流');
+  assert.ok(ai.includes('max_completion_tokens'), 'AI 请求应兼容仅接受 max_completion_tokens 的模型');
+  assert.ok(ai.includes('directAnswerMessages'), 'AI 空正文时应自动请求一次可显示的最终答案');
+  assert.ok(ai.includes('responseDiagnostics'), 'AI 空正文错误必须保留结束原因与安全诊断');
+  assert.ok(ai.includes("parsed.protocol !== 'https:' && !local"), '远程 AI 接口必须使用 HTTPS');
+  assert.ok(app.includes('getAiChapterSource'), 'Electron 冒烟调试接口应能验证章节提取');
+  assert.ok(app.includes("window.GaiaPet.speak(result.comment"), '有珠短评应只显示为桌宠台词');
+  assert.ok(!app.includes("messages.push({ role: 'assistant', mode: result.mode"), '有珠短评不应进入普通聊天记录');
+  const readerHeaderStart = html.indexOf('<header class="topbar reader-topbar">');
+  const readerHeader = html.slice(readerHeaderStart, html.indexOf('</header>', readerHeaderStart));
+  assert.ok(readerHeader.indexOf('id="btn-ai-reader"') < readerHeader.indexOf('id="btn-book-search"'), '阅读顶栏中 AI 对话按钮应位于全文搜索按钮左侧');
+  assert.ok(readerHeader.includes('title="全文搜索当前书籍（Ctrl+F）"') && readerHeader.includes('aria-label="全文搜索当前书籍"') && readerHeader.includes('>全文搜索</span>'), '书内检索按钮必须明确标为全文搜索，收起文字时仍有可访问名称');
+  assert.ok(html.includes('data-selection-action="web-search" title="使用 Google 联网搜索">联网搜索</button>'), '联网搜索按钮应明确名称与默认引擎');
+  const aiPanelStart = html.indexOf('id="ai-summary-panel"');
+  const aiPanel = html.slice(aiPanelStart, html.indexOf('</aside>', aiPanelStart));
+  assert.ok(!readerHeader.includes('data-ai-alice="summary"') && readerHeader.includes('data-ai-alice="comment"'), '有珠顶栏只保留吐槽');
+  assert.ok(!aiPanel.includes('data-ai-alice='), 'AI 对话框内不应重复显示有珠快捷操作');
+  assert.ok(aiPanel.includes('id="ai-reader-model"') && aiPanel.includes('id="btn-ai-chat-center"') && !aiPanel.includes('id="ai-reader-profile"'), 'AI 对话只显示当前模型并可打开 AI 中心');
+  for (const id of ['btn-alice-comment']) {
+    assert.match(readerHeader, new RegExp(`<button[^>]*id="${id}"[^>]*aria-label="[^"]+"`), '有珠操作在紧凑布局下仍可识别');
+  }
+  assert.ok(app.includes("state.aiAliceKind === 'summary' ? '总结中' : '构思中'"), '顶栏快捷操作应显示独立加载状态');
+  assert.ok(app.includes('new ResizeObserver'), 'AI 悬浮窗应记忆缩放后的尺寸');
+  assert.ok(app.includes('saveAiPanelGeometry'), 'AI 悬浮窗应保存位置和大小');
+  assert.ok(!html.includes('btn-ai-summary-minimize'), 'AI 对话不再提供最小化操作');
+  assert.ok(app.includes('toggleAiAppearanceMenu'), 'AI 排版设置应收进 Aa 弹出菜单');
+  assert.ok(app.includes('setAiAppearanceOpen(els.aiAppearancePopover.hidden)'), 'Aa 按钮应能正确切换 AI 排版弹层');
+  assert.ok(!html.includes('id="ai-summary-pane"') && !html.includes('id="btn-ai-tab-summary"'), '独立本章总结页签应被移除');
+  assert.ok(app.includes("document.querySelectorAll('[data-ai-prompt]')"), '三个章节快捷键应共用输入逻辑');
+  for (const prompt of ['简要概括本章内容', '总结本章人物关系', '总结本章伏笔']) {
+    assert.ok(html.includes(`data-ai-prompt="${prompt}"`), `缺少快捷指令：${prompt}`);
+  }
+  const summaryPrompt = app.slice(app.indexOf('function fillAiPrompt('), app.indexOf('function aiChatKey'));
+  assert.ok(summaryPrompt.includes('els.aiChatInput.value = prompt') && summaryPrompt.includes('确认后点击发送'), '章节快捷键应只填入指定的简短待确认指令');
+  assert.ok(!summaryPrompt.includes('sendAiQuestion') && !summaryPrompt.includes('window.api.aiChat'), '点击总结快捷键不得自动提交请求');
+  assert.ok(app.includes("'打断并发送'") && app.includes("'停止生成'") && app.includes('await cancelActiveAiChat()'), '回复期间应支持停止或用新消息打断');
+  assert.ok(app.includes('findEpubNavLabel(nav, href)'), 'AI 章节标题应按当前 EPUB 资源路径精确匹配目录');
+  assert.ok(app.includes('resolveEpubTocTarget(epub.spine && epub.spine.spineItems, item.href)'), 'EPUB 目录跳转前应把目录路径解析为 spine 目标');
+  assert.ok(app.includes('selectChapterScope(entries, index, currentOffset)'), 'EPUB 对话应按目录边界截取当前小章');
+  assert.ok(app.includes('selectChapterScope(entries, chapter, currentOffset)'), 'MOBI/AZW3 对话应按目录边界截取当前小章');
+  assert.ok(app.includes('sameChapterSource(currentChapterSummarySource(), source)'), 'AI 返回结果应兼容同一正文的章节标识波动');
+  assert.ok(app.includes('candidateContent.length >= 32'), 'MOBI/AZW3 的短标题页应推进到紧邻的真实章节');
+  assert.ok(app.includes('await window.api.mobiChapter(c.mobiSession, nextIndex)'), '跨底层片段的 MOBI/AZW3 标题页应读取紧邻正文');
+  assert.ok(app.includes('resolveAiChapterSource'), 'MOBI/AZW3 烟雾测试应验证总结前的异步章节补全');
+  assert.ok(main.includes('当前章节没有可供 AI 阅读的文字'), '无正文页面必须显示明确错误');
+  assert.ok(app.includes("semanticChapterEntries(root, chapter, c.format + ':' + chapter"), '目录缺少小章时，MOBI/AZW3 应按正文标题识别章节');
+  assert.ok(app.includes("return window.GaiaChineseDisplay.sourceRange(range)"), '章节正文提取不得受 AZW3 排版 CSS 的 innerText 可见性影响');
+  assert.ok(app.includes("selector: item.selector || ''"), 'MOBI/AZW3 目录跳转应定位到同一底层文档内的小章起点');
+  assert.ok(app.includes('window.GaiaPageWindow.pageWindow') && app.includes('resolvePageWindowSource'), '无章节书籍应使用当前页附近 12 页上下文');
+  assert.ok(main.includes('parsed.aiContentLen > 100'), 'MOBI/AZW3 冒烟必须在总结前验证 AI 已读到正文，不能只读到空格或页码');
+  assert.ok(css.includes('.ai-content-stage { flex: 1; min-height: 0; overflow: hidden; }'), 'AI 对话内容区不得覆盖标题和状态文字');
+  assert.ok(css.includes('.ai-chat-input-shortcuts'), '对话输入区应显示快捷指令栏');
+  const aiLayer = Number(css.match(/\.ai-summary-panel\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
+  const petLayer = Number(css.match(/\.gaia-pet\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
+  assert.ok(aiLayer > 0 && aiLayer < petLayer, 'AI 对话框应位于有珠和气泡下方，保留桌宠交互');
+  assert.ok(!css.includes('body.ai-assistant-open .gaia-pet-hitbox'), 'AI 对话框打开时不得全局禁用桌宠拖动');
+  assert.ok(css.includes('max-height: 220px; overflow-y: auto;'), '模型选择菜单应限制高度并支持纵向滚动');
+  assert.ok(!html.includes('ai-auto-summarize') && !app.includes('AI_AUTO_SUMMARY') && !app.includes('autoSummarize'), '打开或切换章节不得自动调用 AI 总结');
+  assert.ok(!app.includes('summarizeSource(') && !app.includes('aiSummarize'), '渲染层不得保留独立总结请求');
+  for (const action of ['ai-analyze', 'dictionary', 'web-search', 'book-search']) {
+    assert.ok(html.includes(`data-selection-action="${action}"`), `选区工具栏缺少 ${action}`);
+  }
+  assert.ok(app.includes("sourceDoc.addEventListener('selectionchange'"), '取消正文选择时应监听选区变化并隐藏工具栏');
+  assert.ok(app.includes("context.origin !== 'selection'"), '已有批注与普通文字选区应使用不同的关闭规则');
+  assert.ok(main.includes("ipcMain.handle('dictionary:open'"), '主进程缺少内置词典窗口入口');
+  assert.ok(main.includes("partition: 'GaiaReading_Lucky-dictionary'"), '内置词典应使用隔离会话');
+  assert.ok(main.includes('nodeIntegration: false') && main.includes('sandbox: true'), '内置词典窗口必须禁用 Node 并启用沙箱');
+  assert.ok(main.includes("ipcMain.handle('selection:search'"), '主进程缺少默认浏览器搜索入口');
+  assert.ok(main.includes('Lookup.searchUrl(normalized, { engine, customTemplate: input.customTemplate })'), '主进程应根据用户设置生成搜索地址');
+  assert.ok(main.includes('shell.openExternal(target)'), '网页搜索应交给系统默认浏览器');
+  assert.ok(app.includes('function saveSearchSettings()'), '搜索引擎选择应能持久保存');
+  for (const engine of ['google', 'bing', 'baidu', 'custom']) {
+    assert.ok(html.includes(`<option value="${engine}">`), `设置中缺少 ${engine} 搜索引擎`);
+  }
+  assert.ok(app.includes('document.createTextNode(message.content)'), 'AI 回答必须按纯文本渲染，不能作为 HTML 执行');
+  assert.ok(pet.includes('function speak(text, duration)'), '桌宠应公开受长度限制的 AI 台词入口');
+});
+
+test('README 提供当前品牌、版本和本地启动说明', () => {
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  assert.match(readme, /^# GaiaReading_Lucky\r?\n/);
+  assert.ok(readme.includes('当前稳定版本：**1.2.7**'), 'README 应明确当前稳定版本');
+  assert.ok(readme.includes('## 本地运行') && readme.includes('程序\\GaiaReading_Lucky.exe'), 'README 应说明当前 EXE 启动入口');
+  assert.ok(readme.includes('[本地启动说明](docs/LOCAL_SETUP.md)'), 'README 应链接本地部署与维护说明');
+});
+
+test('主题/排版/翻页动画/菜单相关配置存在', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'src', 'renderer', 'styles.css'), 'utf8');
+  assert.ok(css.includes('#reader-view.dark'), '缺少夜间模式变量');
+  assert.ok(css.includes('#reader-view.eye'), '缺少护眼模式变量');
+  assert.ok(app.includes("animation.id = 'reader-page-turn'"), '缺少书页内容动画');
+  assert.ok(css.includes('pdf-dark'), '缺少 PDF 深色规则');
+  assert.ok(css.includes('book-progress'), '缺少书架进度样式');
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  assert.ok(html.includes('font-select'), '缺少字体选择');
+  assert.ok(html.includes('btn-text-contrast') && html.includes('text-contrast-value'), '缺少夜间文字对比度控制');
+  assert.ok(html.includes('reader-theme-options'), '缺少主题切换');
+  assert.ok(!html.includes('btn-pet-console') && html.includes('右键点击有珠，可打开有珠控制台'), '设置页用小字说明有珠右键入口');
+  for (const id of ['pdf-zoom-controls', 'btn-pdf-zoom-out', 'btn-pdf-zoom-reset', 'btn-pdf-zoom-in', 'btn-pdf-pairing', 'pdf-zoom-value']) {
+    assert.ok(html.includes(`id="${id}"`), `PDF 阅读器缺少手动缩放控件 ${id}`);
+  }
+  assert.ok(app.includes("c.format === 'pdf' && (ev.ctrlKey || ev.metaKey)") && app.includes('queuePdfWheelZoom(d, ev)'), 'PDF 应支持 Ctrl+滚轮缩放');
+  assert.ok(app.includes('shouldScrollPdfPage(els.readerContent, d)'), 'PDF 普通滚轮应优先滚动当前页');
+  assert.ok(app.includes('restorePdfZoomAnchor(stage, renderOptions.anchor)'), 'PDF 缩放后应保持鼠标所指阅读位置');
+  assert.ok(html.includes('../shared/pdf-layout.js') && app.includes('pdfLayoutForPage(renderOptions.page == null ? c.page : renderOptions.page, c.pages, spread, c.pdfPairing)'), 'PDF 阅读器应接入单页/双页布局模块');
+  assert.ok(app.includes('PDF_ZOOM_MODES.FIT_PAGE') && app.includes('PDF_ZOOM_MODES.FIT_WIDTH') && app.includes('PDF_ZOOM_MODES.MANUAL'), 'PDF 应支持适合页面、适合宽度和手动缩放');
+  assert.ok(app.includes('c.pdfTextRoots = textRoots'), 'PDF 双页必须分别保存每页文字层以支持搜索和笔记');
+  assert.ok(css.includes('.pdf-zoom-controls'), 'PDF 手动缩放控件缺少样式');
+  assert.ok(html.includes('progress-fill'), '缺少阅读进度条');
+  assert.ok(html.includes("style-src 'self' 'unsafe-inline' blob:"), '缺少 blob 样式许可（图书 CSS 会被拦截）');
+  const main = fs.readFileSync(path.join(root, 'src', 'main.js'), 'utf8');
+  assert.ok(main.includes('setApplicationMenu'), '缺少自定义菜单');
+  assert.ok(main.includes('autoHideMenuBar'), '缺少菜单栏隐藏配置');
+});
+
+test('测试用 EPUB fixture 存在', () => {
+  const fixture = path.join(root, 'tests', 'fixtures', 'sample.epub');
+  assert.ok(fs.existsSync(fixture), 'fixture 缺失，请先运行 node scripts/make-fixture.js');
+  assert.ok(fs.statSync(fixture).size > 1000);
+});
+
+test('应用图标存在且打包配置已启用', () => {
+  const png = path.join(root, 'build', 'icon.png');
+  assert.ok(fs.existsSync(png), 'build/icon.png 缺失，请先运行 scripts/make-icon.ps1');
+  const ico = path.join(root, 'build', 'icon.ico');
+  assert.ok(fs.existsSync(ico), 'build/icon.ico 缺失，请先运行 scripts/make-icon.ps1');
+  assert.ok(fs.statSync(ico).size > 1000, 'icon.ico 异常过小（生成可能失败）');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.ok(pkg.build && pkg.build.win, '缺少 build.win 配置');
+  assert.strictEqual(pkg.build.win.icon, 'build/icon.ico');
+});
+
+
+
+
+
+
+
+
+test('全局阅读习惯、进度精度与主题即时生效已接入', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  assert.ok(app.includes('function applyGlobalHabits'), '缺少全局习惯应用函数');
+  assert.ok(!app.includes('function applyBookSettings'), '不应再按书记忆阅读习惯');
+  const themeCalls = (app.match(/paginator\.setTheme\(state\.prefs\.theme\)/g) || []).length;
+  assert.ok(themeCalls >= 3, '打开 MOBI/TXT 时应立即注入主题（当前 ' + themeCalls + ' 处）');
+  assert.ok(app.includes('percent.toFixed(2)'), '进度百分比应显示两位小数');
+  assert.ok(app.includes('epubDisplayPercent'), 'EPUB 进度应使用位置索引+回退计算');
+  assert.ok(app.includes('readMode: state.readMode'), '习惯应写入全局 prefs');
+  assert.ok(app.includes('migrateHabitsFromLastBook'), '应保留旧版按书习惯的迁移');
+});
+
+test('EPUB 行距跟随用户设置且切换时即时生效', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  assert.ok(/line-height: ' \+ state\.lineHeight \+ ' !important/.test(app), 'EPUB 段落行距应使用 state.lineHeight');
+  assert.ok(!app.includes('line-height: 1.9 !important; } h1, h2, h3, h4'), '不应再写死 EPUB 段落行距 1.9');
+  const cycleSeg = app.slice(app.indexOf('function cycleLineHeight'), app.indexOf('function togglePanel'));
+  assert.ok(cycleSeg.includes('applyEpubTypography()'), 'cycleLineHeight 应更新 epub.js 主题行距');
+  assert.ok(cycleSeg.includes('applyReaderStyles(contents)'), 'cycleLineHeight 应立即重注入 EPUB 阅读样式');
+  const setSeg = app.slice(app.indexOf('setLineHeight: (lh)'));
+  assert.ok(setSeg.includes('applyReaderStyles(contents)'), 'setLineHeight 应立即重注入 EPUB 阅读样式');
+});
+
+test('书签支持内容锚点、重命名与 TXT 章节识别', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const bm = fs.readFileSync(path.join(root, 'src', 'shared', 'bookmarks.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  assert.ok(bm.includes('function renameBookmark'), '书签库应支持重命名');
+  assert.ok(app.includes('renameBookmarkFromMap'), '渲染进程应接入重命名');
+  assert.ok(app.includes('paginator.anchor()'), '应通过内容锚点定位书签');
+  assert.ok(app.includes('paginator.locate('), '跳转应使用内容锚点重新定位');
+  assert.ok(app.includes('txtChapters'), '应识别 TXT 章节');
+  assert.ok(html.includes('txt-chapters.js'), '应加载 TXT 章节识别模块');
+  assert.ok(fs.existsSync(path.join(root, 'src', 'shared', 'txt-chapters.js')), 'txt-chapters 模块缺失');
+  assert.ok(!html.includes('id="btn-add-bookmark"') && !html.includes('id="btn-annotations"'), '设置应合并书签笔记并移除独立添加书签按钮');
+  assert.ok(app.includes('function bindReaderBookmarkContext(sourceDoc)') && app.includes("sourceDoc.addEventListener('contextmenu'"), '正文应绑定右键添加书签');
+  assert.ok(app.includes('event.defaultPrevented') && app.includes('#gaia-pet'), '有珠及已处理右键不应添加书签');
+  assert.ok(app.includes('function appendCollectionHeader(panel, active)') && app.includes("tabs.setAttribute('role', 'tablist')"), '书签和笔记应共用可切换页签');
+});
+
+test('MOBI/AZW3 书内脚注链接由阅读器解析并跳转', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(root, 'src', 'preload.js'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'src', 'main.js'), 'utf8');
+  assert.ok(app.includes('bindMobiDocumentLinks(c.paginator.doc)'), '加载章节后必须绑定书内链接');
+  assert.ok(app.includes('event.preventDefault()') && app.includes('jumpToMobiDocumentHref(href)'), '点击脚注必须阻止浏览器默认跳转并交给阅读器');
+  assert.ok(preload.includes("ipcRenderer.invoke('mobi:resolve-href'"), '预加载层必须暴露书内链接解析接口');
+  assert.ok(main.includes("ipcMain.handle('mobi:resolve-href'"), '主进程必须按当前 MOBI 会话解析链接');
+});
+
+test('分页器保留左右页边距（版心）', () => {
+  const p = fs.readFileSync(path.join(root, 'src', 'renderer', 'paginator.js'), 'utf8');
+  assert.ok(p.includes("'body > * { margin-left: ' + pagePad + 'px !important; margin-right: ' + pagePad + 'px !important; max-width: '"), '页面应注入左右页边距并限制一级内容宽度');
+  assert.ok(p.includes('this.verticalPadding = 28;'), '分页正文应保留舒适的上下留白');
+  assert.ok(p.includes("padding: ' + this.verticalPadding + 'px 0; box-sizing: border-box"), '上下留白应计入分页高度，不能挤出可视区域');
+  assert.ok(!p.includes("'p { text-indent: 2em !important; margin: 0 0 0.8em !important;"), '段落排版不应再重置左右边距');
+  assert.ok(p.includes("margin-top: 0 !important; margin-bottom: 0.8em !important"), '段落应只设上下边距，保留版心左右留白');
+});
+
+test('测试用 PDF fixture 包含五页并可重复生成', () => {
+  const fixture = path.join(root, 'tests', 'fixtures', 'sample.pdf');
+  assert.ok(fs.existsSync(fixture), 'PDF fixture 缺失，请运行 node scripts/make-pdf-fixture.js');
+  assert.ok(fs.statSync(fixture).size > 1000);
+  assert.ok(fs.existsSync(path.join(root, 'scripts', 'make-pdf-fixture.js')));
+  assert.ok(fs.existsSync(path.join(root, 'scripts', 'pdf-smoke.js')));
+});
+
+test('全主题高对比文字即时应用于所有可重排格式并保持 PDF 原样', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const pag = fs.readFileSync(path.join(root, 'src', 'renderer', 'paginator.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  assert.ok(html.includes('../shared/reader-contrast.js'), '页面应加载夜间文字对比度模块');
+  assert.ok(app.includes('function cycleReaderTextContrast()'), '缺少文字对比度切换逻辑');
+  assert.ok(app.includes('readerTextContrast: window.GaiaReaderContrast.normalizeReaderTextContrast'), '文字对比度应写入全局阅读习惯');
+  assert.ok(app.includes("els.textContrastRow.hidden = !!c && c.format === 'pdf'"), 'PDF 设置中不得显示文字对比度控制');
+  assert.ok(app.includes('-webkit-text-fill-color: '), 'EPUB 应强制覆盖特殊文字填充色');
+  assert.ok(app.includes('c.paginator.setTextContrast(state.prefs.readerTextContrast)'), 'TXT/MOBI/AZW3 应同步文字对比度');
+  assert.ok(pag.includes('setTextContrast(value)') && pag.includes('readerTextColor(this.theme, contrast)'), '分页器应按当前主题应用高对比颜色');
+  assert.ok(app.includes("theme !== 'light' || highContrast"), '日间模式高对比档应强制覆盖正文颜色');
+  assert.ok(pag.includes('opacity: 1 !important'), '高对比模式应清除正文元素异常透明度');
+});
+
+test('可调节页边距功能接入', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const pag = fs.readFileSync(path.join(root, 'src', 'renderer', 'paginator.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  assert.ok(html.includes('btn-margin'), '缺少页边距按钮');
+  assert.ok(html.includes('margin-value') && html.includes('vertical-margin-value'), '左右与上下边距分别显示当前值');
+  assert.ok(html.includes('btn-vertical-margin') && app.includes('function cycleVerticalMargin()'), '上下边距应独立调节');
+  assert.ok(app.includes('const MARGIN_OPTIONS = [4, 8, 12, 16];'), '应提供边距档位');
+  assert.ok(app.includes('function cycleMargin()'), '缺少边距循环函数');
+  assert.ok(app.includes('paginator.setMargins('), '应调用分页器边距');
+  assert.ok(app.includes("'body > * { margin-left: ' + marginPct + '% !important;"), 'EPUB 应注入可调边距');
+  assert.ok(app.includes("padding-top: ' + currentVerticalMargin() + 'px !important; padding-bottom: ' + currentVerticalMargin() + 'px !important;"), 'EPUB 正文应保留上下留白');
+  assert.ok(pag.includes('setMargin(pct)'), '分页器应支持 setMargin');
+  assert.ok(pag.includes('this.marginPct'), '分页器应保存边距档位');
+});
+
+test('分页图片总宽度不会越过右侧列边界', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const pag = fs.readFileSync(path.join(root, 'src', 'renderer', 'paginator.js'), 'utf8');
+  assert.ok(app.includes('img, svg { max-width: 100% !important; height: auto !important; box-sizing: border-box !important;'), 'EPUB 媒体应服从容器宽度并计入边框和内边距');
+  assert.ok(app.includes("max-width: calc(100% - ' + (marginPct * 2) + '%) !important; box-sizing: border-box"), 'EPUB 一级内容应扣除左右页边距');
+  assert.ok(app.includes("body > img, body > svg { max-width: calc(100% - ' + (marginPct * 2) + '%) !important;"), 'EPUB 一级图片应限制在版心内');
+  assert.ok(pag.includes("'img, svg { max-width: 100% !important; box-sizing: border-box !important;"), 'MOBI/AZW3 媒体应服从容器宽度并计入边框和内边距');
+  assert.ok(pag.includes("'body > img, body > svg { max-width: ' + (this.pageWidth - pagePad * 2) + 'px !important;"), 'MOBI/AZW3 一级图片应限制在版心内');
+  const typographyStart = pag.indexOf('  applyTypography() {');
+  const themeStart = pag.indexOf('  applyTheme() {', typographyStart);
+  assert.ok(!pag.slice(typographyStart, themeStart).includes('img { max-width: 100% !important'), '排版样式不能再次覆盖分页器计算出的图片宽度');
+});
+
+test('EPUB、PDF、TXT、MOBI 与 AZW3 共用可调双页间隙', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const pag = fs.readFileSync(path.join(root, 'src', 'renderer', 'paginator.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="btn-spread-gap"') && html.includes('id="spread-gap-value"'), '设置页缺少双页间隙控件');
+  assert.ok(html.includes('../shared/spread-gap.js'), '渲染层未加载双页间隙档位模块');
+  assert.ok(app.includes("gap: currentSpreadGap()"), 'EPUB 初始化时应使用用户设置的间隙');
+  assert.strictEqual((app.match(/new window\.GaiaPaginator\(els\.readerContent, \{ pageWidth: 640, gap: currentSpreadGap\(\) \}\)/g) || []).length, 2, 'TXT 与 MOBI/AZW3 应使用同一间隙');
+  assert.ok(app.includes("if (!c || state.readMode !== 'spread') return") && app.includes('const gap = spread ? currentSpreadGap() : 0'), 'PDF 应仅在双页模式应用共用页面间隙');
+  assert.ok(app.includes('spreadGap: currentSpreadGap()'), '双页间隙应写入全局阅读习惯');
+  assert.ok(pag.includes('setGap(px)') && pag.includes('initialGap') && pag.includes('initialGap : 0'), '分页器应支持0px间隙和实时更新');
+  assert.ok(app.includes("column-rule: 1px solid rgba(127,127,127,.28)"), '无额外间隙时仍应显示细书脊线区分左右页');
+});
+
+test('内置 BGM 功能接入', () => {
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'src', 'main.js'), 'utf8');
+  const shared = fs.readFileSync(path.join(root, 'src', 'shared', 'bgm.js'), 'utf8');
+  assert.ok(fs.existsSync(path.join(root, 'src', 'renderer', 'bgm.js')), '缺少渲染进程 BGM 模块');
+  assert.ok(html.includes('bgm.js'), '应加载 BGM 脚本');
+  assert.ok(html.includes("media-src 'self' bgm: blob: data:"), 'CSP 应允许 bgm: 媒体协议');
+  assert.ok(main.includes('protocol.registerSchemesAsPrivileged'), '主进程应注册 bgm 协议');
+  assert.ok(main.includes("app.commandLine.appendSwitch('autoplay-policy'"), '应开启自动播放策略');
+  assert.ok(app.includes('window.GaiaBgm.initBgm()'), '应用启动应初始化 BGM');
+  assert.ok(shared.includes("BGM_DEFAULT_LOOP = ['alice', 'soujurou']"), '默认循环应只有有珠/草十郎');
+});
+
+test('BGM 胶囊封面与阅读进度条细节', () => {
+  const html = fs.readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'src', 'renderer', 'styles.css'), 'utf8');
+  const music = fs.readFileSync(path.join(root, 'src', 'renderer', 'music.css'), 'utf8');
+  const bgm = fs.readFileSync(path.join(root, 'src', 'renderer', 'bgm.js'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  assert.ok(fs.existsSync(path.join(root, 'assets', 'bgm', 'cover.jpg')), '缺少专辑封面');
+  assert.ok(html.includes("img-src 'self' data: blob: bgm:"), 'CSP 应允许 bgm: 图片');
+  assert.ok(bgm.includes('bgm://local/cover.jpg'), '胶囊应加载专辑封面');
+  assert.ok(music.includes('.bgm-cover'), '应有封面缩略图样式');
+  assert.ok(music.includes('#bgm-capsule.in-topbar'), '阅读界面胶囊应嵌入顶栏');
+  assert.ok(bgm.includes('#reader-bgm-slot'), '渲染进程应把胶囊放入阅读页专用槽位');
+  assert.ok(bgm.includes('function setSettingsOpen(open)'), 'BGM 应响应设置抽屉开关状态');
+  assert.ok(app.includes('window.GaiaBgm.setSettingsOpen(true)'), '打开设置时应通知 BGM 胶囊避让');
+  assert.ok(app.includes('window.GaiaBgm.setSettingsOpen(false)'), '关闭设置时应恢复 BGM 胶囊位置');
+  assert.ok(music.includes('#bgm-capsule[data-settings-open="1"]'), '设置打开时应有胶囊避让样式');
+  assert.ok(music.includes('calc(var(--settings-drawer-width) + 24px)'), '胶囊应移动到设置抽屉左侧');
+  assert.ok(css.includes('#reader-view.settings-open .reader-actions'), '设置打开时应收起顶栏操作，避免与音乐胶囊重叠');
+  assert.ok(music.includes('@media (max-width: 760px)'), '窄窗口下应隐藏无空间避让的胶囊');
+  assert.ok(bgm.includes('function animateSettingsEntry(fromRect)'), '打开设置时应从胶囊原位置开始移动');
+  assert.ok(bgm.includes("settingsAnimation.id = 'bgm-settings-entry-flip'"), '打开设置应使用真实位置间的 FLIP 动画');
+  assert.ok(bgm.includes('function animateSettingsRestore(fromRect)'), '关闭设置时胶囊应平滑返回原位');
+  assert.ok(bgm.includes("matchMedia('(prefers-reduced-motion: reduce)')"), '胶囊动画应尊重系统减少动态效果设置');
+  assert.ok(bgm.includes("titleCopy.setAttribute('aria-hidden', 'true')"), '循环副本不能让屏幕阅读器重复朗读曲名');
+  assert.ok(bgm.includes('ui.titleText.textContent = text'), '曲名必须通过纯文本显示');
+  const topIdx = html.indexOf('id="progress-track"');
+  const footerIdx = html.indexOf('<footer class="statusbar">');
+  assert.ok(topIdx >= 0 && footerIdx >= 0 && footerIdx < topIdx, '进度条应位于底部状态栏（footer 内）');
+});
+
+test('键盘快捷键：左右键翻页、Esc 返回书架', () => {
+  const app = fs.readFileSync(path.join(root, 'src', 'renderer', 'app.js'), 'utf8');
+  assert.ok(app.includes("ev.key === 'ArrowLeft'"), '← 键应绑定上一页');
+  assert.ok(app.includes("ev.key === 'ArrowRight'"), '→ 键应绑定下一页');
+  assert.ok(app.includes("ev.key === 'Escape'"), 'Esc 键应关闭阅读界面');
+  assert.ok(app.includes('prevPage()'), '← 应调用上一页');
+  assert.ok(app.includes('nextPage()'), '→ 应调用下一页');
+  assert.ok(app.includes('backToLibrary()'), 'Esc 应返回书架');
+  assert.ok(app.includes('views.reader.hidden'), '仅在阅读界面响应快捷键');
+});

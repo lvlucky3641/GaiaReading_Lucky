@@ -1,0 +1,119 @@
+/* A quiet, nocturnal study. Tokens are local to the library and reading goals. */
+#library-view,
+#stats-view {
+  --bg: #16211e;
+  --surface: #1e2c26;
+  --border: #36453c;
+  --border-strong: #718171;
+  --text: #f0eee6;
+  --text-soft: #b4beb3;
+  --accent: #c7b68b;
+  --accent-soft: #2c382e;
+  --danger: #f3a69b;
+  --danger-soft: #3b2927;
+  --shadow: rgba(0, 0, 0, .3);
+  --paper-font: "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --title-font: "Palatino Linotype", "STZhongsong", "SimSun", serif;
+  --page-inset: clamp(28px, 5vw, 76px);
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--paper-font);
+}
+#library-view .page-bookmark,
+#stats-view .page-bookmark {
+  display: inline-block;
+  flex: 0 0 10px;
+  width: 10px;
+  height: 22px;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+}
+#library-view .topbar,
+#stats-view .topbar {
+  min-height: 64px;
+  flex: 0 0 auto;
+  gap: 22px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+#library-view .page-title,
+#stats-view .page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .12em;
+}
+#library-view .page-title .page-bookmark,
+#stats-view .page-title .page-bookmark {
+  height: 16px;
+  width: 7px;
+  flex-basis: 7px;
+}
+#library-view .btn,
+#stats-view .btn {
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  background: transparent;
+  font-family: var(--paper-font);
+  font-size: 12px;
+  font-weight: 400;
+  box-shadow: none;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+#library-view .topbar .btn,
+#stats-view .topbar .btn {
+  border-color: transparent;
+  color: var(--text-soft);
+}
+#library-view .btn:hover,
+#stats-view .btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--accent-soft);
+}
+#library-view .btn.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+#library-view .btn.primary:hover {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+#library-view .btn.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+#library-view .btn.danger:hover {
+  background: var(--danger-soft);
+}
+#library-view button:focus-visible,
+#library-view a:focus-visible,
+#stats-view button:focus-visible,
+#stats-view a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+#library-view .heading-dot,
+#stats-view .heading-dot {
+  margin-left: 4px;
+  color: var(--accent);
+}
+
+@media (max-width: 1000px) {
+#library-view .topbar,
+#stats-view .topbar { padding-inline: 20px; gap: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+#library-view .btn,
+#stats-view .btn { transition: none; }
+}
